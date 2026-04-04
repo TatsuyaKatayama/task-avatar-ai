@@ -30,7 +30,7 @@ class OpenAIProvider {
     if (!json) {
       console.warn("Retrying OpenAI due to JSON parse failure...");
       messages.push({ role: "assistant", content: rawText });
-      messages.push({ role: "user", content: "出力は必ず指定されたJSON形式（フィールド: emotion, text）にしてください。余計な文章や、コードブロックは一切含めないでください。" });
+      messages.push({ role: "system", content: "【フォーマットエラー】謝罪や形式に関する説明を一切含まず、本来の回答内容（ユーザーへの案内）のみを指定のJSON形式（emotion, text）で再出力してください。" });
 
       response = await this.client.chat.completions.create({
         model: "gpt-4-turbo",

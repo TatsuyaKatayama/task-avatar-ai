@@ -25,8 +25,8 @@ class GeminiProvider {
     // リトライ処理: JSONでなければもう一度だけ厳格なフォーマット指定で依頼
     if (!json) {
       console.warn("Retrying Gemini due to JSON parse failure...");
-      // 再試行用のメッセージを送信
-      const retryMessage = "出力は必ず指定されたJSON形式（フィールド: emotion, text）にしてください。余計な文章や、コードブロックは一切含めないでください。";
+      // 再試行用のメッセージを送信（メタな謝罪を禁止）
+      const retryMessage = "【フォーマット修正命令】謝罪や形式に関する説明を一切含まず、本来の回答内容のみを、指定のJSON形式（emotion, text）で再出力してください。";
       result = await chat.sendMessage(retryMessage);
       rawText = result.response.text();
       json = extractJSON(rawText);
