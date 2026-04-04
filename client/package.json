@@ -6,6 +6,9 @@
     "dev": "vite",
     "test": "jest"
   },
+  "jest": {
+    "testEnvironment": "jsdom"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -15,7 +18,10 @@
     "vite": "^8.0.3"
   },
   "devDependencies": {
+    "@babel/preset-env": "^7.29.2",
+    "babel-jest": "^30.3.0",
     "jest": "^30.3.0",
+    "jest-environment-jsdom": "^30.3.0",
     "jsdom": "^29.0.1"
   }
 }
