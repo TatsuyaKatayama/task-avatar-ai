@@ -26,16 +26,27 @@
             background: white;
             border-top: 1px solid #ccc;
             display: flex;
-            gap: 10px;
+            flex-wrap: wrap;
+            gap: 15px;
             align-items: center;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        label {
+            font-size: 0.8rem;
+            color: #666;
+        }
+        select, button {
+            padding: 8px 12px;
+            cursor: pointer;
         }
         #status {
             margin-left: auto;
-            color: #666;
-        }
-        button {
-            padding: 10px 20px;
-            cursor: pointer;
+            font-weight: bold;
+            color: #333;
         }
         #transcript {
             position: absolute;
@@ -49,6 +60,8 @@
             pointer-events: none;
             max-width: 80%;
             text-align: center;
+            font-size: 1.2rem;
+            min-width: 200px;
         }
     </style>
 </head>
@@ -58,6 +71,27 @@
             <div id="transcript">ここに喋った内容が表示されます</div>
         </div>
         <div id="controls">
+            <div class="control-group">
+                <label for="task-select">タスク</label>
+                <select id="task-select">
+                    <option value="cook_rice_1cup">ご飯を炊く (1合)</option>
+                    <option value="connect_wires">電気配線の接続</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="character-select">性格</label>
+                <select id="character-select">
+                    <option value="gentle">優しい家庭教師</option>
+                    <option value="strict">厳格な安全管理者</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="provider-select">プロバイダー</label>
+                <select id="provider-select">
+                    <option value="gemini">Google Gemini</option>
+                    <option value="openai">OpenAI GPT-4</option>
+                </select>
+            </div>
             <button id="start-btn">音声認識開始</button>
             <div id="status">待機中</div>
         </div>
