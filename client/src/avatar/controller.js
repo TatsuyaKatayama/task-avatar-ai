@@ -1,4 +1,4 @@
-import { Avatar } from 'virtual-avatar';
+import { AvatarSpeaker } from 'virtual-avatar';
 
 /**
  * virtual-avatar SDK を使用したアバター制御クラス。
@@ -11,49 +11,104 @@ export class AvatarController {
 
   /**
    * アバターの初期化
-   * @param {string} vrmUrl - .vrm ファイルへのパス
    */
   async init(vrmUrl) {
-    this.avatar = new Avatar();
-    await this.avatar.init(this.container, vrmUrl);
+    const statusEl = document.getElementById('loading-status');
+    const updateStatus = (text) => {
+      console.log(`[AvatarController] ${text}`);
+      if (statusEl) statusEl.innerText = text;
+    };
+
+    try {
+      updateStatus('SDK インスタンス作成中...');
+      this.avatar = new AvatarSpeaker(this.container);
+
+      updateStatus('初期化中...');
+      await this.avatar.initialize();
+
+      updateStatus('モデル読み込み中...');
+      await this.avatar.setAvatar(vrmUrl);
+
+      // Canvas 救出（SDKがbody直下などに作ったCanvasをコンテナに移動）
+      const strayCanvas = document.querySelector('canvas:not(#avatar-canvas)');
+      if (strayCanvas && this.container) {
+        console.log('[AvatarController] Rescuing canvas...');
+        this.container.appendChild(strayCanvas);
+      }
+
+      // 強制的に描画フラグを立ててループ開始
+      this.avatar.isReady = true; 
+      this.avatar.animate();
+
+      // サイズを強制的にフィットさせる
+      const fitCanvas = () => {
+        const strayCanvas = this.container.querySelector('canvas');
+        if (strayCanvas) {
+          strayCanvas.style.width = '100%';
+          strayCanvas.style.height = '100%';
+          window.dispatchEvent(new Event('resize'));
+        }
+      };
+      
+      // 描画が落ち着くまで数回実行
+      fitCanvas();
+      setTimeout(fitCanvas, 500);
+      setTimeout(fitCanvas, 1000);
+      
+      if (statusEl) statusEl.style.display = 'none';
+      console.log('[AvatarController] Init complete.');
+
+    } catch (error) {
+      updateStatus(`エラー発生: ${error.message}`);
+      console.error('[AvatarController] Init Error:', error);
+    }
   }
 
   /**
-   * アバターに喋らせる（感情とテキスト）
-   * @param {string} text - 発話内容
-   * @param {string} emotion - 感情 (smile, neutral, thinking, sad など)
+   * アバターに喋らせる
    */
   async speak(text, emotion = 'neutral') {
     if (!this.avatar) return;
-
-    // 感情を反映
     this.applyEmotion(emotion);
 
-    // 発話 (SDK側で音声合成とリップシンクが行われる想定)
-    await this.avatar.say(text);
-
-    // 発話終了後に表情をリセット（必要に応じて）
-    // this.applyEmotion('neutral');
+    try {
+      // 存在する発話メソッドを呼び出す
+      const speakMethod = this.avatar.say || this.avatar.speak;
+      if (speakMethod) {
+        await speakMethod.call(this.avatar, text);
+      }
+    } catch (e) {
+      console.error('[AvatarController] Speak error:', e);
+    } finally {
+      // ハック: SDK が勝手に生成した字幕ポップアップを消去する
+      setTimeout(() => {
+        const popups = document.querySelectorAll('div[style*="background: rgba(0, 0, 0, 0.7)"]');
+        popups.forEach(el => el.remove());
+      }, 100);
+    }
   }
 
   /**
    * 表情を切り替える
-   * @param {string} emotion 
    */
   applyEmotion(emotion) {
     if (!this.avatar) return;
 
-    // virtual-avatar SDK の仕様に合わせてマッピング
-    // ここでは基本的な喜怒哀楽を想定
     const emotionMap = {
-      'smile': 'happy',
+      'smile': 'smile',
       'neutral': 'neutral',
-      'thinking': 'relaxed',
+      'thinking': 'neutral',
       'sad': 'sad',
       'angry': 'angry'
     };
 
-    const sdkEmotion = emotionMap[emotion] || 'neutral';
-    this.avatar.setExpression(sdkEmotion);
+    const methodName = emotionMap[emotion] || 'neutral';
+    if (typeof this.avatar[methodName] === 'function') {
+      try {
+        this.avatar[methodName]();
+      } catch (e) {
+        console.warn(`[AvatarController] Expression error (${methodName}):`, e);
+      }
+    }
   }
 }
