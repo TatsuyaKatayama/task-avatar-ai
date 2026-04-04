@@ -11,19 +11,34 @@ export class Orchestrator {
     this.avatar = new AvatarController('canvas-container');
     this.api = new APIClient();
     
-    // セッション ID は起動時に一度だけ生成
-    this.sessionId = `session-${Date.now()}`;
+    // UI 要素の取得
+    this.taskSelect = document.getElementById('task-select');
+    this.characterSelect = document.getElementById('character-select');
+    this.providerSelect = document.getElementById('provider-select');
     
-    // デフォルトの設定 (本来はUIから変更可能にする)
-    this.taskId = 'cook_rice_1cup';
-    this.avatarType = 'gentle';
-    this.provider = 'gemini';
+    // セッション ID は起動時に生成
+    this._resetSession();
 
     this._setupHandlers();
+    this._setupUIListeners();
+  }
+
+  _resetSession() {
+    this.sessionId = `session-${Date.now()}`;
+    console.log('Session reset:', this.sessionId);
   }
 
   async init(vrmUrl) {
     await this.avatar.init(vrmUrl);
+  }
+
+  _setupUIListeners() {
+    // タスクや性格が変更されたらセッションをリセットして履歴をクリアする
+    [this.taskSelect, this.characterSelect, this.providerSelect].forEach(el => {
+      if (el) {
+        el.addEventListener('change', () => this._resetSession());
+      }
+    });
   }
 
   _setupHandlers() {
@@ -38,13 +53,18 @@ export class Orchestrator {
         this._updateStatus('考え中...');
         
         try {
+          // UI から現在の設定を取得
+          const taskId = this.taskSelect?.value || 'cook_rice_1cup';
+          const avatarType = this.characterSelect?.value || 'gentle';
+          const provider = this.providerSelect?.value || 'gemini';
+
           // 1. LLM API を呼び出す
           const result = await this.api.callLLM({
             sessionId: this.sessionId,
             userMessage: transcript,
-            taskId: this.taskId,
-            avatarType: this.avatarType,
-            provider: this.provider
+            taskId,
+            avatarType,
+            provider
           });
 
           console.log('[LLM Output]:', result);
