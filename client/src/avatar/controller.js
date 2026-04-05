@@ -67,7 +67,7 @@ export class AvatarController {
   /**
    * アバターに喋らせる
    */
-  async speak(text, emotion = 'neutral') {
+  async speak(text, emotion = 'neutral', audioUrl = null) {
     if (!this.avatar) return;
     this.applyEmotion(emotion);
 
@@ -75,7 +75,11 @@ export class AvatarController {
       // 存在する発話メソッドを呼び出す
       const speakMethod = this.avatar.say || this.avatar.speak;
       if (speakMethod) {
-        await speakMethod.call(this.avatar, text);
+        if (audioUrl) {
+          await speakMethod.call(this.avatar, text, { audio: audioUrl });
+        } else {
+          await speakMethod.call(this.avatar, text);
+        }
       }
     } catch (e) {
       console.error('[AvatarController] Speak error:', e);
