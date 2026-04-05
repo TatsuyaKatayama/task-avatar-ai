@@ -1,38 +1,52 @@
-const fs = require('fs').promises;
-const path = require('path');
+const { db } = require('../../db/init');
 
 class PromptRegistry {
-  constructor(promptsDir) {
-    this.promptsDir = promptsDir;
-  }
-
-  async getPrompt(layer, name, override = null) {
-    if (override) return override;
-    
-    let filePath;
-    if (layer === 'base') {
-      filePath = path.join(this.promptsDir, 'base.txt');
-    } else {
-      filePath = path.join(this.promptsDir, layer, `${name}.txt`);
-    }
-
+  async getPromptById(id) {
+    if (!id) return '';
     try {
-      return await fs.readFile(filePath, 'utf-8');
+      const row = db.prepare('SELECT content FROM prompt_fragments WHERE id = ?').get(id);
+      return row ? row.content : '';
     } catch (error) {
-      console.warn(`Warning: Could not load prompt ${layer}/${name}. Using empty string.`);
+      console.warn(`Warning: Could not load prompt ID ${id}. Using empty string.`);
       return '';
     }
   }
 
-  async getFullPromptConfig(config, overrides = {}) {
-    const [base, safety, character, task] = await Promise.all([
-      this.getPrompt('base', null, overrides.base),
-      this.getPrompt('safety', `level${config.safetyLevel}`, overrides.safety),
-      this.getPrompt('characters', config.avatarType, overrides.character),
-      this.getPrompt('tasks', config.taskId, overrides.task)
+  async getFullPromptConfig(avatarPresetId, taskPresetId) {
+    // 1. Get Avatar Preset
+    const avatar = db.prepare('SELECT * FROM avatar_presets WHERE id = ?').get(avatarPresetId);
+    if (!avatar) throw new Error('Avatar preset not found');
+
+    // 2. Get Task Preset
+    const task = db.prepare('SELECT * FROM task_presets WHERE id = ?').get(taskPresetId);
+    if (!task) throw new Error('Task preset not found');
+
+    // 3. Get System Settings
+    const system = db.prepare('SELECT * FROM system_settings WHERE id = 1').get();
+
+    // 4. Fetch fragments
+    const [base, safety, character, taskInstruction] = await Promise.all([
+      this.getPromptById(system?.base_prompt_id),
+      this.getPromptById(task.safety_prompt_id),
+      this.getPromptById(avatar.character_prompt_id),
+      this.getPromptById(task.task_prompt_id)
     ]);
 
-    return { base, safety, character, task };
+    return { 
+      base, 
+      safety, 
+      character, 
+      task: taskInstruction,
+      voiceConfig: {
+        speakerId: avatar.voice_speaker_id,
+        speed: avatar.voice_speed,
+        pitch: avatar.voice_pitch
+      },
+      animations: {
+        startup: avatar.startup_anim_url,
+        shutdown: avatar.shutdown_anim_url
+      }
+    };
   }
 }
 

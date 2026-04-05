@@ -1,25 +1,22 @@
 const express = require('express');
 const router = express.Router();
-const path = require('path');
 const PromptRegistry = require('../services/prompt/registry');
 const PromptBuilder = require('../services/prompt/builder');
 const LLMFactory = require('../services/llm/factory');
 const sessionStore = require('../services/session/store');
 
-const promptsDir = path.join(__dirname, '../prompts');
-const registry = new PromptRegistry(promptsDir);
+const registry = new PromptRegistry();
 
 router.post('/llm', async (req, res) => {
   const { 
     sessionId, 
     userMessage, 
-    taskId, 
-    avatarType, 
-    overrides = {}, 
+    avatarPresetId,
+    taskPresetId,
     provider = 'gemini' 
   } = req.body;
 
-  if (!sessionId || !userMessage || !taskId || !avatarType) {
+  if (!sessionId || !userMessage || !avatarPresetId || !taskPresetId) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
@@ -27,9 +24,8 @@ router.post('/llm', async (req, res) => {
     // 1. セッション履歴の取得
     const history = sessionStore.getHistory(sessionId);
 
-    // 2. プロンプトの合成 (SafetyLevelは一旦固定値1、将来的にtask定義から取得)
-    const taskConfig = { safetyLevel: 1, taskId, avatarType };
-    const promptConfig = await registry.getFullPromptConfig(taskConfig, overrides);
+    // 2. プロンプトの合成
+    const promptConfig = await registry.getFullPromptConfig(avatarPresetId, taskPresetId);
     const systemPrompt = PromptBuilder.build(promptConfig);
 
     // 3. LLMの呼び出し
@@ -40,8 +36,12 @@ router.post('/llm', async (req, res) => {
     sessionStore.addMessage(sessionId, 'user', userMessage);
     sessionStore.addMessage(sessionId, 'assistant', result.text);
 
-    // 5. レスポンスの返却
-    res.json(result);
+    // 5. レスポンスの返却 (LLM結果に加えて、音声設定とアニメーション設定も含める)
+    res.json({
+      ...result,
+      voiceConfig: promptConfig.voiceConfig,
+      animations: promptConfig.animations
+    });
   } catch (error) {
     console.error('API Error:', error);
     res.status(500).json({ error: 'Internal Server Error', details: error.message });

@@ -123,12 +123,46 @@
         }
 
         /* --- ハック: SDKが強制挿入する字幕ポップアップを非表示にする --- */
-        div[style*="background: rgba(0, 0, 0, 0.7)"][style*="color: white"][style*="border-radius: 8px"] {
+        div[style*="background: rgba(0, 0, 0, 0.7)"][style*="color: white"] {
             display: none !important;
-            opacity: 0 !important;
-            visibility: hidden !important;
-            pointer-events: none !important;
         }
+
+        /* --- クレジットモーダル --- */
+        #credit-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+            position: relative;
+            color: #333;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .modal-content h3 { margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .modal-content pre { 
+            background: #f8f8f8; 
+            padding: 15px; 
+            white-space: pre-wrap; 
+            font-size: 0.85rem; 
+            max-height: 300px; 
+            overflow-y: auto; 
+            border: 1px solid #ddd;
+        }
+        #close-credit {
+            position: absolute;
+            top: 10px; right: 15px;
+            font-size: 1.8rem; cursor: pointer; color: #999;
+        }
+        #close-credit:hover { color: #333; }
 
         /* ---------------------------
            下部：コントロールパネル
@@ -187,15 +221,13 @@
             <div class="control-group">
                 <label for="task-select">タスク</label>
                 <select id="task-select">
-                    <option value="cook_rice_1cup">ご飯を炊く (1合)</option>
-                    <option value="connect_wires">電気配線の接続</option>
+                    <option value="">ロード中...</option>
                 </select>
             </div>
             <div class="control-group">
-                <label for="character-select">性格</label>
+                <label for="character-select">アバター</label>
                 <select id="character-select">
-                    <option value="gentle">優しい家庭教師</option>
-                    <option value="strict">厳格な安全管理者</option>
+                    <option value="">ロード中...</option>
                 </select>
             </div>
             <div class="control-group">
@@ -214,8 +246,22 @@
             </div>
             <button id="start-btn" style="background: #e0f0ff;">🎤 音声認識開始</button>
             <div id="status">待機中</div>
+            <div style="margin-left: 20px; display: flex; gap: 10px; align-items: center;">
+              <button id="credit-btn" style="background: none; border: 1px solid #ccc; color: #666; font-size: 0.7rem;">ℹ️ クレジット</button>
+              <a href="/admin.html" style="font-size: 0.8rem; color: #666; text-decoration: underline;">⚙️ 管理画面</a>
+            </div>
         </div>
     </div>
+
+    <!-- クレジットモーダル -->
+    <div id="credit-modal">
+        <div class="modal-content">
+            <span id="close-credit">&times;</span>
+            <h3>📜 クレジット</h3>
+            <pre id="credit-text-display">読み込み中...</pre>
+        </div>
+    </div>
+
     <script type="module" src="/src/main.js"></script>
 </body>
 </html>
