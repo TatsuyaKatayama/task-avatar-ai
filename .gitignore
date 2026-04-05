@@ -149,3 +149,4 @@ dist
 
 client/public/assets/animations/*
 client/public/assets/models/*
+database.sqlite

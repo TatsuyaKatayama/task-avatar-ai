@@ -19,7 +19,18 @@ export class Orchestrator {
     this.providerSelect = document.getElementById('provider-select');
     this.chatInput = document.getElementById('chat-input');
     this.sendBtn = document.getElementById('send-btn');
+    this.creditBtn = document.getElementById('credit-btn');
+    this.creditModal = document.getElementById('credit-modal');
+    this.closeCredit = document.getElementById('close-credit');
     
+    console.log('[Orchestrator] Elements:', {
+      creditBtn: !!this.creditBtn,
+      creditModal: !!this.creditModal,
+      closeCredit: !!this.closeCredit
+    });
+    
+    this.presets = { avatars: [], tasks: [] };
+
     // セッション ID は起動時に生成
     this._resetSession();
 
@@ -27,25 +38,127 @@ export class Orchestrator {
     this._setupUIListeners();
   }
 
+  async showCredits() {
+    console.log('[Orchestrator] showCredits called');
+    if (!this.creditModal) {
+      console.error('[Orchestrator] creditModal is null');
+      return;
+    }
+    
+    // まず表示する
+    this.creditModal.style.display = 'flex';
+
+    try {
+      const res = await fetch('http://localhost:3000/api/credits');
+      const data = await res.json();
+      const display = document.getElementById('credit-text-display');
+      if (display) {
+        if (data.credits && data.credits.length > 0) {
+          // 内容 (content) のみを結合して表示
+          display.innerText = data.credits.map(c => c.content).join('\n\n');
+        } else {
+          display.innerText = 'クレジット情報が設定されていません。';
+        }
+      }
+    } catch (e) {
+      console.error('[Orchestrator] showCredits error:', e);
+    }
+  }
+
   _resetSession() {
     this.sessionId = `session-${Date.now()}`;
     console.log('Session reset:', this.sessionId);
   }
 
+  async loadPresets() {
+    try {
+      const res = await fetch('http://localhost:3000/api/presets');
+      this.presets = await res.json();
+      
+      // Update UI Selects
+      if (this.characterSelect) {
+        this.characterSelect.innerHTML = this.presets.avatars.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+      }
+      if (this.taskSelect) {
+        this.taskSelect.innerHTML = this.presets.tasks.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+      }
+    } catch (e) {
+      console.error('Failed to load presets:', e);
+      this._updateStatus('初期データの読み込みに失敗しました');
+    }
+  }
+
   async init(vrmUrl) {
-    await this.avatar.init(vrmUrl);
+    // 1. プリセットデータをロード
+    await this.loadPresets();
+
+    // 2. 初期アバターの決定 (引数指定がなければ最初のプリセット)
+    let targetUrl = vrmUrl;
+    let initialPreset = this.presets.avatars.length > 0 ? this.presets.avatars[0] : null;
+
+    if (!targetUrl && initialPreset) {
+      targetUrl = initialPreset.vrm_url;
+    }
+
+    if (targetUrl) {
+      // モデルを初期化（AvatarController側の500ms待機を含む）
+      await this.avatar.init(targetUrl);
+      
+      // 初期挨拶アニメーション (準備が完全に整うよう、ここでもわずかに待機)
+      if (initialPreset && initialPreset.startup_anim_url) {
+        console.log('[Orchestrator] Requesting startup animation:', initialPreset.startup_anim_url);
+        setTimeout(async () => {
+          await this.avatar.playAnimation(initialPreset.startup_anim_url);
+        }, 100);
+      }
+    }
   }
 
   _setupUIListeners() {
-    // タスクや性格が変更されたらセッションをリセットして履歴をクリアする
-    [this.taskSelect, this.characterSelect, this.providerSelect].forEach(el => {
-      if (el) {
-        el.addEventListener('change', () => {
+    // クレジット表示
+    if (this.creditBtn) {
+      this.creditBtn.addEventListener('click', () => this.showCredits());
+    }
+    if (this.closeCredit) {
+      this.closeCredit.addEventListener('click', () => {
+        this.creditModal.style.display = 'none';
+      });
+    }
+    window.addEventListener('click', (e) => {
+      if (e.target === this.creditModal) this.creditModal.style.display = 'none';
+    });
+
+    // タスク変更
+    if (this.taskSelect) {
+      this.taskSelect.addEventListener('change', () => {
+        this._resetSession();
+        this._clearChatHistory();
+      });
+    }
+
+    // アバター変更
+    if (this.characterSelect) {
+      this.characterSelect.addEventListener('change', async () => {
+        const presetId = parseInt(this.characterSelect.value);
+        const preset = this.presets.avatars.find(a => a.id === presetId);
+        
+        if (preset) {
           this._resetSession();
           this._clearChatHistory();
-        });
-      }
-    });
+          this._updateStatus('アバター切替中...');
+          
+          // モデルの再ロード
+          await this.avatar.init(preset.vrm_url);
+          
+          // 挨拶アニメーション再生
+          if (preset.startup_anim_url) {
+            await this.avatar.playAnimation(preset.startup_anim_url);
+          }
+          
+          this._updateStatus('待機中');
+        }
+      });
+    }
 
     // テキスト送信ボタンのクリックイベント
     if (this.sendBtn) {
@@ -121,16 +234,20 @@ export class Orchestrator {
     
     try {
       // UI から現在の設定を取得
-      const taskId = this.taskSelect?.value || 'cook_rice_1cup';
-      const avatarType = this.characterSelect?.value || 'gentle';
+      const taskPresetId = this.taskSelect?.value;
+      const avatarPresetId = this.characterSelect?.value;
       const provider = this.providerSelect?.value || 'gemini';
+
+      if (!taskPresetId || !avatarPresetId) {
+        throw new Error('プリセットが選択されていません');
+      }
 
       // 1. LLM API を呼び出す
       const result = await this.api.callLLM({
         sessionId: this.sessionId,
         userMessage,
-        taskId,
-        avatarType,
+        taskPresetId,
+        avatarPresetId,
         provider
       });
 
@@ -142,9 +259,9 @@ export class Orchestrator {
 
       this._updateStatus('音声生成中...');
       
-      // 性格に合わせてキャラクター(スピーカーID)を変更
-      // 2: 四国めたん(ノーマル), 13: 青山龍星(ノーマル)
-      const speakerId = avatarType === 'gentle' ? 2 : 13;
+      // バックエンドから返された Voicevox の設定を使用する
+      const { speakerId, speed, pitch } = result.voiceConfig || { speakerId: 1, speed: 1.0, pitch: 0.0 };
+      
       const audioBlob = await this.voicevox.getAudioBlob(result.text, speakerId);
       const audioUrl = URL.createObjectURL(audioBlob);
 
@@ -153,8 +270,8 @@ export class Orchestrator {
       // 2. アバターに喋らせ、表情を変える
       await this.avatar.speak(result.text, result.emotion, audioUrl);
 
-      // メモリリークを防ぐため、再生後にURLを解放
-      URL.revokeObjectURL(audioUrl);
+      // メモリリークを防ぐため、少し待ってからURLを解放
+      setTimeout(() => URL.revokeObjectURL(audioUrl), 10000);
 
       this._updateStatus('待機中');
 

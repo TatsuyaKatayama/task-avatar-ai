@@ -11,13 +11,12 @@ export class APIClient {
    * @param {Object} params 
    * @param {string} params.sessionId - セッションを一意に識別するID
    * @param {string} params.userMessage - ユーザーの音声入力テキスト
-   * @param {string} params.taskId - 実行中のタスクID (例: cook_rice_1cup)
-   * @param {string} params.avatarType - アバターの性格タイプ (gentle, strict)
+   * @param {string} params.taskPresetId - 選択されたタスクプリセットのID
+   * @param {string} params.avatarPresetId - 選択されたアバタープリセットのID
    * @param {string} [params.provider='gemini'] - 使用する LLM プロバイダー
-   * @param {Object} [params.overrides={}] - プロンプトの上書き設定
-   * @returns {Promise<Object>} - { emotion: string, text: string }
+   * @returns {Promise<Object>} - { emotion, text, voiceConfig, animations }
    */
-  async callLLM({ sessionId, userMessage, taskId, avatarType, provider = 'gemini', overrides = {} }) {
+  async callLLM({ sessionId, userMessage, taskPresetId, avatarPresetId, provider = 'gemini' }) {
     const response = await fetch(`${this.baseUrl}/api/llm`, {
       method: 'POST',
       headers: {
@@ -26,10 +25,9 @@ export class APIClient {
       body: JSON.stringify({
         sessionId,
         userMessage,
-        taskId,
-        avatarType,
-        provider,
-        overrides
+        taskPresetId,
+        avatarPresetId,
+        provider
       }),
     });
 

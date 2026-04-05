@@ -13,53 +13,56 @@ export class AvatarController {
    * アバターの初期化
    */
   async init(vrmUrl) {
-    const statusEl = document.getElementById('loading-status');
-    const updateStatus = (text) => {
-      console.log(`[AvatarController] ${text}`);
-      if (statusEl) statusEl.innerText = text;
-    };
-
     try {
-      updateStatus('SDK インスタンス作成中...');
-      this.avatar = new AvatarSpeaker(this.container);
-
-      updateStatus('初期化中...');
-      await this.avatar.initialize();
-
-      updateStatus('モデル読み込み中...');
-      await this.avatar.setAvatar(vrmUrl);
-
-      // Canvas 救出（SDKがbody直下などに作ったCanvasをコンテナに移動）
-      const strayCanvas = document.querySelector('canvas:not(#avatar-canvas)');
-      if (strayCanvas && this.container) {
-        console.log('[AvatarController] Rescuing canvas...');
-        this.container.appendChild(strayCanvas);
+      // 1. 既存アバターの完全破棄
+      if (this.avatar) {
+        if (typeof this.avatar.destroy === 'function') {
+          this.avatar.destroy();
+        }
+        this.avatar = null;
+      }
+      if (this.container) {
+        this.container.innerHTML = '';
       }
 
-      // 強制的に描画フラグを立ててループ開始
-      this.avatar.isReady = true; 
-      this.avatar.animate();
-
-      // サイズを強制的にフィットさせる
-      const fitCanvas = () => {
-        const strayCanvas = this.container.querySelector('canvas');
-        if (strayCanvas) {
-          strayCanvas.style.width = '100%';
-          strayCanvas.style.height = '100%';
-          window.dispatchEvent(new Event('resize'));
+      // 2. 新規インスタンス作成 (idleアニメパスを明示)
+      this.avatar = new AvatarSpeaker(this.container, {
+        animations: {
+          idle: '/assets/animations/standard_idle.vrma'
         }
-      };
+      });
+
+      // 3. 初期化とモデルロード
+      await this.avatar.initialize();
+      await this.avatar.setAvatar(vrmUrl);
+
+      // 4. Canvasの配置調整
+      const strayCanvas = document.querySelector('canvas:not(#avatar-canvas)');
+      if (strayCanvas && this.container) {
+        this.container.appendChild(strayCanvas);
+        strayCanvas.id = 'avatar-canvas';
+        strayCanvas.style.width = '100%';
+        strayCanvas.style.height = '100%';
+      }
+
+      // 5. 描画とまばたきの開始
+      this.avatar.isReady = true;
+      if (typeof this.avatar.animate === 'function') {
+        this.avatar.animate('/assets/animations/standard_idle.vrma');
+      }
       
-      // 描画が落ち着くまで数回実行
-      fitCanvas();
-      setTimeout(fitCanvas, 500);
-      setTimeout(fitCanvas, 1000);
+      if (this.avatar.blinkController) {
+        this.avatar.blinkController.start();
+      }
+
+      // 初回のリサイズを強制
+      window.dispatchEvent(new Event('resize'));
       
-      if (statusEl) statusEl.style.display = 'none';
+      // アニメーションボーンの準備が整うまでわずかに待機
+      await new Promise(resolve => setTimeout(resolve, 500));
       console.log('[AvatarController] Init complete.');
 
     } catch (error) {
-      updateStatus(`エラー発生: ${error.message}`);
       console.error('[AvatarController] Init Error:', error);
     }
   }
@@ -72,7 +75,6 @@ export class AvatarController {
     this.applyEmotion(emotion);
 
     try {
-      // 存在する発話メソッドを呼び出す
       const speakMethod = this.avatar.say || this.avatar.speak;
       if (speakMethod) {
         if (audioUrl) {
@@ -84,11 +86,27 @@ export class AvatarController {
     } catch (e) {
       console.error('[AvatarController] Speak error:', e);
     } finally {
-      // ハック: SDK が勝手に生成した字幕ポップアップを消去する
+      // SDKの字幕を消去するハック
       setTimeout(() => {
         const popups = document.querySelectorAll('div[style*="background: rgba(0, 0, 0, 0.7)"]');
         popups.forEach(el => el.remove());
       }, 100);
+    }
+  }
+
+  /**
+   * 任意のアニメーションファイルを再生する
+   */
+  async playAnimation(url) {
+    if (!this.avatar || !url) return;
+    try {
+      if (this.avatar.playAnimation) {
+        await this.avatar.playAnimation(url);
+      } else if (this.avatar.animationManager && this.avatar.animationManager.playAnimation) {
+        await this.avatar.animationManager.playAnimation(url);
+      }
+    } catch (e) {
+      console.error('[AvatarController] Animation error:', e);
     }
   }
 
