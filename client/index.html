@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Avatar AI</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: sans-serif;
+            overflow: hidden;
+            background: #f0f0f0;
+        }
+        #app {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        
+        /* ---------------------------
+           上部：メインエリア (左右分割)
+           --------------------------- */
+        #main-area {
+            flex: 1;
+            display: flex;
+            flex-direction: row;
+            overflow: hidden;
+            background: #222;
+        }
+        
+        /* 左側：アバター描画領域 */
+        #canvas-container {
+            flex: 2; /* 右側より広く */
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-right: 1px solid rgba(255,255,255,0.1);
+            background: #1a1a1a;
+            overflow: hidden; /* はみ出し防止 */
+        }
+        
+        /* SDKが生成したCanvasのスタイル */
+        #canvas-container canvas {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain; /* アス比を保って収める */
+            z-index: 1;
+        }
+        
+        /* ローディング表示 */
+        #loading-status {
+            color: white;
+            font-size: 1.2rem;
+            z-index: 10;
+            background: rgba(0,0,0,0.5);
+            padding: 10px 20px;
+            border-radius: 10px;
+            pointer-events: none;
+            position: absolute;
+        }
+
+        /* 右側：会話履歴パネル */
+        #chat-panel {
+            flex: 1;
+            min-width: 300px;
+            max-width: 400px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+        }
+        .chat-header {
+            padding: 15px;
+            background: #111;
+            font-weight: bold;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        #chat-history {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        /* メッセージの吹き出しスタイル */
+        .message-row {
+            display: flex;
+            flex-direction: column;
+            max-width: 90%;
+        }
+        .message-row.user {
+            align-self: flex-end;
+            align-items: flex-end;
+        }
+        .message-row.avatar {
+            align-self: flex-start;
+            align-items: flex-start;
+        }
+        .message-label {
+            font-size: 0.7rem;
+            color: #aaa;
+            margin-bottom: 3px;
+        }
+        .message-bubble {
+            padding: 10px 15px;
+            border-radius: 15px;
+            font-size: 0.95rem;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+        .user .message-bubble {
+            background: #2b78e4; /* 青系 */
+            border-bottom-right-radius: 2px;
+        }
+        .avatar .message-bubble {
+            background: #444;    /* グレー系 */
+            border-bottom-left-radius: 2px;
+        }
+
+        /* --- ハック: SDKが強制挿入する字幕ポップアップを非表示にする --- */
+        div[style*="background: rgba(0, 0, 0, 0.7)"][style*="color: white"] {
+            display: none !important;
+        }
+
+        /* --- クレジットモーダル --- */
+        #credit-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+            position: relative;
+            color: #333;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .modal-content h3 { margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .modal-content pre { 
+            background: #f8f8f8; 
+            padding: 15px; 
+            white-space: pre-wrap; 
+            font-size: 0.85rem; 
+            max-height: 300px; 
+            overflow-y: auto; 
+            border: 1px solid #ddd;
+        }
+        #close-credit {
+            position: absolute;
+            top: 10px; right: 15px;
+            font-size: 1.8rem; cursor: pointer; color: #999;
+        }
+        #close-credit:hover { color: #333; }
+
+        /* ---------------------------
+           下部：コントロールパネル
+           --------------------------- */
+        #controls {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #ccc;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        label {
+            font-size: 0.8rem;
+            color: #666;
+        }
+        select, input, button {
+            padding: 8px 12px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        #status {
+            margin-left: auto;
+            font-weight: bold;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- メインエリア -->
+        <div id="main-area">
+            <!-- 左側: アバター -->
+            <div id="canvas-container">
+                <div id="loading-status">初期化中...</div>
+            </div>
+            
+            <!-- 右側: チャット履歴 -->
+            <div id="chat-panel">
+                <div class="chat-header">🗨️ 会話履歴</div>
+                <div id="chat-history">
+                    <!-- メッセージはここにJSで追加される -->
+                </div>
+            </div>
+        </div>
+
+        <!-- コントロールパネル -->
+        <div id="controls">
+            <div class="control-group">
+                <label for="task-select">タスク</label>
+                <select id="task-select">
+                    <option value="">ロード中...</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="character-select">アバター</label>
+                <select id="character-select">
+                    <option value="">ロード中...</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="provider-select">プロバイダー</label>
+                <select id="provider-select">
+                    <option value="gemini">Google Gemini</option>
+                    <option value="openai">OpenAI GPT-4</option>
+                </select>
+            </div>
+            <div class="control-group" style="flex: 1; min-width: 200px;">
+                <label for="chat-input">メッセージ入力 (マイク代わり)</label>
+                <div style="display: flex; gap: 5px;">
+                    <input type="text" id="chat-input" placeholder="メッセージを入力..." style="flex: 1; padding: 8px;">
+                    <button id="send-btn">送信</button>
+                </div>
+            </div>
+            <button id="start-btn" style="background: #e0f0ff;">🎤 音声認識開始</button>
+            <div id="status">待機中</div>
+            <div style="margin-left: 20px; display: flex; gap: 10px; align-items: center;">
+              <button id="credit-btn" style="background: none; border: 1px solid #ccc; color: #666; font-size: 0.7rem;">ℹ️ クレジット</button>
+              <a href="/admin.html" style="font-size: 0.8rem; color: #666; text-decoration: underline;">⚙️ 管理画面</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- クレジットモーダル -->
+    <div id="credit-modal">
+        <div class="modal-content">
+            <span id="close-credit">&times;</span>
+            <h3>📜 クレジット</h3>
+            <pre id="credit-text-display">読み込み中...</pre>
+        </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>
