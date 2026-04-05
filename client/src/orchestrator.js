@@ -1,6 +1,7 @@
 import { STTRecorder } from './stt/recorder';
 import { AvatarController } from './avatar/controller';
 import { APIClient } from './api/client';
+import { VoicevoxClient } from './api/voicevox';
 
 /**
  * クライアント側のアクションフローを統括するオーケストレーター。
@@ -10,6 +11,7 @@ export class Orchestrator {
     this.stt = new STTRecorder();
     this.avatar = new AvatarController('canvas-container');
     this.api = new APIClient();
+    this.voicevox = new VoicevoxClient();
     
     // UI 要素の取得
     this.taskSelect = document.getElementById('task-select');
@@ -138,8 +140,21 @@ export class Orchestrator {
       // LLMの応答をチャット履歴に追加
       this._appendMessage('avatar', result.text);
 
+      this._updateStatus('音声生成中...');
+      
+      // 性格に合わせてキャラクター(スピーカーID)を変更
+      // 2: 四国めたん(ノーマル), 13: 青山龍星(ノーマル)
+      const speakerId = avatarType === 'gentle' ? 2 : 13;
+      const audioBlob = await this.voicevox.getAudioBlob(result.text, speakerId);
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      this._updateStatus('発話中...');
+
       // 2. アバターに喋らせ、表情を変える
-      await this.avatar.speak(result.text, result.emotion);
+      await this.avatar.speak(result.text, result.emotion, audioUrl);
+
+      // メモリリークを防ぐため、再生後にURLを解放
+      URL.revokeObjectURL(audioUrl);
 
       this._updateStatus('待機中');
 
